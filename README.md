@@ -3,7 +3,7 @@
 # Ocean Surface Simulation on GPU
 These assets create a realistic ocean surface for Unity with C# and compute shaders (HLSL). 
 
-## Features:
+## Features
 
 - Very realistic surface: The displacement map is based off the method of generating water which essentially sums up a bunch of waves using the IFFT algorithm. This results in a super realistic look and is used in many movies/games. 
 

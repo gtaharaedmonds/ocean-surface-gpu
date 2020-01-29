@@ -24,4 +24,6 @@ Note: This displacement map is very realistic, not the shader, which still needs
 
 To control demo scenes just use WASD for movement and the mouse. 
 
+This project was really just about creating realistic displacement, not realistic shading, as my knowledge of creating shaders is pretty limited. Hopefully I can improve the visuals at some point.
+
 While I wrote the code, a lot of the math in this project is way above my level, especially the FFT algorithm, so a lot was heavily based on online papers/tutorials. 

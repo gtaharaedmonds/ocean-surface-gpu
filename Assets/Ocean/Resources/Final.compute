@@ -1,0 +1,54 @@
+﻿/*
+	Author: Gus Tahara-Edmonds
+	Date: Summer 2019
+	Purpose: Apply some tweaking to the displacement map to get desired result (i.e. how choppy the water is)
+	Also calculates normals based on estimated dX, dZs and generates folding map by taking the jacobian. 
+	Note: When I wrote the code the jacobian math was beyond me and so is based off online papers/tutorials
+*/
+
+#pragma kernel CSMain
+
+Texture2D<float2> dy;
+Texture2D<float4> dxz;
+Texture2D<float4> slope;
+
+RWTexture2D<float3> displacementMap;
+RWTexture2D<float3> normalMap;
+RWTexture2D<float> foldingMap;
+
+uint N;
+float choppyScale;
+
+float jacobian(uint2 id) {
+	float2 dDx = displacementMap[uint2(id.x + 1, id.y)].xz - displacementMap[uint2(id.x - 1, id.y)].xz;
+	dDx *= 0.5 * choppyScale;
+	float2 dDy = displacementMap[uint2(id.x, id.y + 1)].xz - displacementMap[uint2(id.x, id.y - 1)].xz;
+	dDy *= 0.5 * choppyScale;
+	
+	return (1.0 + dDx.x) * (1.0 + dDy.y) - dDx.y * dDy.x;
+}
+
+float3 getNormalApprox(uint2 id) {
+	float2 off = float2(1, 0);
+	float hL = displacementMap[id - off].y;
+	float hR = displacementMap[id + off].y;
+	float hD = displacementMap[id - off.yx].y;
+	float hU = displacementMap[id + off.yx].y;
+
+	return normalize(float3(hL - hR, 2, hD - hU));
+}
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID) {
+	float sign = fmod(id.x + id.y, 2) * 2 - 1;
+
+	float y = dy[id.xy].x * sign;
+	float x = dxz[id.xy].x * sign * -1 * choppyScale;
+	float z = dxz[id.xy].z * sign * -1 * choppyScale;
+	displacementMap[id.xy] = float3(x, y, z);
+
+	normalMap[id.xy] = getNormalApprox(id.xy);
+
+	float j = jacobian(id.xy);
+	foldingMap[id.xy] = 1 - j;
+}

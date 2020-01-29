@@ -1,0 +1,59 @@
+﻿/*
+	Author: Gus Tahara-Edmonds
+	Date: Summer 2019
+	Purpose: Generates the spectrum which is a combination of the RNG from Ocean script. (h0k) This 
+	script puts it into the correct format that IFFT can take it and make an actual displacement map.
+	Note: While I wrote the code most of the math is beyond me and is heavily based off online papers/tutorials
+*/
+
+
+#pragma kernel GetSpectrum
+
+RWTexture2D<float2> Hkt_y;
+RWTexture2D<float4> Hkt_xz;
+RWTexture2D<float4> slope;
+
+Texture2D h0;
+
+uint N;
+float t;
+
+float2 cMultiply(float2 c0, float2 c1) {
+	return float2(c0.x * c1.x - c0.y * c1.y, c0.x * c1.y + c0.y * c1.x);
+}
+
+float2 cAdd(float2 c0, float2 c1) {
+	return float2(c0.x + c1.x, c0.y + c1.y);
+}
+
+[numthreads(8,8,1)]
+void GetSpectrum (uint3 id : SV_DispatchThreadID)
+{
+	const float pi = 3.14;
+	const float g = 9.81;
+
+	uint index = id.y * N + id.x;
+
+	float2 k = 2 * pi / N * float2(2.0 * id.x - N, 2.0 * id.y - N);
+	float mag = length(k);
+	if (mag < 0.0001) mag = 0.0001;
+	float w = sqrt(g * mag);
+
+	float2 h0k = h0[id.xy].xy;
+	float2 h0mk = h0[id.xy].zw;
+
+	float2 exp = float2(cos(w * t), sin(w * t));
+	float2 expInv = float2(exp.x, -exp.y);
+
+	//dy
+	float2 Hdy = cAdd(cMultiply(h0k, exp), cMultiply(h0mk, expInv));
+
+	//dxz
+	float2 Hdx = cMultiply(Hdy, float2(0, -k.x / mag));
+	float2 Hdz = cMultiply(Hdy, float2(0, -k.y / mag));
+	float4 Hdxz = float4(Hdx.xy, Hdz.xy);
+
+	Hkt_y[id.xy] = Hdy;
+	Hkt_xz[id.xy] = Hdxz;
+	slope[id.xy] = Hdxz * -mag;
+}

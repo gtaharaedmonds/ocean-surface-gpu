@@ -1,0 +1,84 @@
+﻿/*
+	Author: Gus Tahara-Edmonds
+	Date: Summer 2019
+	Purpose: Computes the inverse fast-fourier-transform in horizontal and vertical directions. This algorithm goes from frequency domain to space domain.
+	Note: While I wrote the code most of the math is beyond me and is heavily based off online papers/tutorials
+*/
+
+
+#pragma kernel PerformFFTHorizontal
+#pragma kernel PerformFFTVertical
+
+RWTexture2D<float2> dy;
+RWTexture2D<float4> dxz;
+RWTexture2D<float4> slope;
+
+RWTexture2D<float2> pingpongdy;
+RWTexture2D<float4> pingpongdxz;
+RWTexture2D<float4> pingpongslope;
+
+Buffer<float> butterflyLookupTable;
+Texture2D butterflyLookupTexture;
+
+uint N;
+uint index;
+
+float4 FFT(float2 w, float4 input1, float4 input2) {
+	input1.x += w.x * input2.x - w.y * input2.y;
+	input1.y += w.y * input2.x + w.x * input2.y;
+	input1.z += w.x * input2.z - w.y * input2.w;
+	input1.w += w.y * input2.z + w.x * input2.w;
+
+	return input1;
+}
+
+float2 FFT(float2 w, float2 input1, float2 input2) {
+	input1.x += w.x * input2.x - w.y * input2.y;
+	input1.y += w.y * input2.x + w.x * input2.y;
+
+	return input1;
+}
+
+[numthreads(8, 8, 1)]
+void PerformFFTHorizontal(uint3 id : SV_DispatchThreadID) {
+	float4 b = butterflyLookupTexture[uint2(id.x, index)];
+	uint X = b.x;
+	uint Y = b.y;
+	float2 w = float2(b.zw);
+
+	uint2 indexX = uint2(X, id.y);
+	uint2 indexY = uint2(Y, id.y);
+
+	if (index % 2 == 0) {
+		pingpongdy[id.xy] = FFT(w, dy[indexX], dy[indexY]);
+		pingpongdxz[id.xy] = FFT(w, dxz[indexX], dxz[indexY]);
+		pingpongslope[id.xy] = FFT(w, slope[indexX], slope[indexY]);
+	}
+	else {
+		dy[id.xy] = FFT(w, pingpongdy[indexX], pingpongdy[indexY]);
+		dxz[id.xy] = FFT(w, pingpongdxz[indexX], pingpongdxz[indexY]);
+		slope[id.xy] = FFT(w, pingpongslope[indexX], pingpongslope[indexY]);
+	}
+}
+
+[numthreads(8, 8, 1)]
+void PerformFFTVertical(uint3 id : SV_DispatchThreadID) {
+	float4 b = butterflyLookupTexture[uint2(id.y, index)];
+	uint X = b.x;
+	uint Y = b.y;
+	float2 w = b.zw;
+
+	uint2 indexX = uint2(id.x, X);
+	uint2 indexY = uint2(id.x, Y);
+
+	if (index % 2 == 0) {
+		pingpongdy[id.xy] = FFT(w, dy[indexX], dy[uint2(id.x, Y)]);
+		pingpongdxz[id.xy] = FFT(w, dxz[indexX], dxz[uint2(id.x, Y)]);
+		pingpongslope[id.xy] = FFT(w, slope[indexX], slope[uint2(id.x, Y)]);
+	}
+	else {
+		dy[id.xy] = FFT(w, pingpongdy[indexX], pingpongdy[indexY]);
+		dxz[id.xy] = FFT(w, pingpongdxz[indexX], pingpongdxz[indexY]);
+		slope[id.xy] = FFT(w, pingpongslope[indexX], pingpongslope[indexY]);
+	}
+}
